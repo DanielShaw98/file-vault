@@ -1,5 +1,14 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
+import { getUser } from "./users";
+
+async function hasAccessToOrg(ctx: QueryCtx | MutationCtx, tokenIdentifier: string, orgId: string) {
+  const user = await getUser(ctx, tokenIdentifier);
+
+  const hasAccess = user.orgIds.includes(orgId) || user.tokenIdentifier.includes(orgId);
+
+  return hasAccess;
+}
 
 export const createFile = mutation({
   args: {
@@ -7,9 +16,16 @@ export const createFile = mutation({
     orgId: v.string(),
   },
   async handler(ctx, args) {
-    const indentity = await ctx.auth.getUserIdentity();
-    if (!indentity) {
+    const identity = await ctx.auth.getUserIdentity();
+
+    if (!identity) {
       throw new ConvexError("Sign in to create file");
+    }
+
+    const hasAccess = await hasAccessToOrg(ctx, identity.tokenIdentifier, args.orgId);
+
+    if (!hasAccess) {
+      throw new ConvexError("User is not a member of this organization");
     }
 
     await ctx.db.insert("files", {
@@ -24,9 +40,15 @@ export const getFiles = query({
     orgId: v.string(),
   },
   async handler(ctx, args) {
-    const indentity = await ctx.auth.getUserIdentity();
-    
-    if (!indentity) {
+    const identity = await ctx.auth.getUserIdentity();
+
+    if (!identity) {
+      return [];
+    }
+
+    const hasAccess = await hasAccessToOrg(ctx, identity.tokenIdentifier, args.orgId);
+
+    if (!hasAccess) {
       return [];
     }
 
