@@ -7,10 +7,12 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { useToast } from "@/hooks/use-toast"
 import { Input } from "@/components/ui/input"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
+import { Loader2 } from "lucide-react";
 
 const formSchema = z.object({
   title: z.string().min(1).max(200),
@@ -20,6 +22,7 @@ const formSchema = z.object({
 })
 
 export default function Home() {
+  const { toast } = useToast();
   const organization = useOrganization();
   const user = useUser();
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
@@ -47,15 +50,29 @@ export default function Home() {
 
     const { storageId } = await result.json();
 
-    await createFile({
-      name: values.title,
-      fileId: storageId,
-      orgId,
-    });
+    try {
+      await createFile({
+        name: values.title,
+        fileId: storageId,
+        orgId,
+      });
 
-    form.reset();
+      form.reset();
 
-    setIsFileDialogOpen(false);
+      setIsFileDialogOpen(false);
+
+      toast({
+        variant: "success",
+        title: "File Uploaded",
+        description: "File is accessible now",
+      });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "File Upload Failed",
+        description: "File could not be uploaded, try again later",
+      });
+    }
   };
 
   let orgId: string | undefined = undefined;
@@ -72,7 +89,10 @@ export default function Home() {
     <main className="container mx-auto pt-12">
       <div className="flex justify-between items-center">
         <h1 className="text-4xl font-bold">Your Files</h1>
-        <Dialog open={isFileDialogOpen} onOpenChange={setIsFileDialogOpen}>
+        <Dialog open={isFileDialogOpen} onOpenChange={(isOpen) => {
+          setIsFileDialogOpen(isOpen);
+          form.reset();
+        }}>
           <DialogTrigger asChild>
             <Button
               onClick={() => {
@@ -117,7 +137,11 @@ export default function Home() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit">Submit</Button>
+                <Button type="submit" disabled={form.formState.isSubmitting} className="flex gap-1">
+                  {form.formState.isSubmitting && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )} Submit
+                </Button>
               </form>
             </Form>
           </DialogContent>
